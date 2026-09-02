@@ -1,0 +1,890 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>NEON//CLI: ENTERPRISE PRO</title>
+<style>
+  :root{--bg:#020703;--panel:#031006;--text:#8cff9b;--dim:#4ea85d;--bright:#d6ffe0;--warn:#ffd36b;--bad:#ff6b6b;--glow:0 0 6px rgba(140,255,155,.65),0 0 18px rgba(140,255,155,.22)}
+  *{box-sizing:border-box} html,body{height:100%;margin:0;background:#000;overflow:hidden}
+  body{display:flex;align-items:center;justify-content:center;font-family:"Courier New",monospace;color:var(--text);background:radial-gradient(circle at center,#07170a 0%,#020603 55%,#000 100%)}
+  .screen{position:relative;width:min(1480px,96vw);height:min(900px,94vh);background:linear-gradient(180deg,rgba(7,20,8,.98),rgba(2,10,3,.98));border:1px solid rgba(140,255,155,.25);border-radius:18px;box-shadow:0 0 0 2px rgba(0,0,0,.7),0 0 60px rgba(0,255,120,.15),inset 0 0 40px rgba(120,255,150,.06);overflow:hidden;transition:all 0.3s ease}
+  .screen::before{content:"";position:absolute;inset:0;background:linear-gradient(to bottom,rgba(255,255,255,.02),rgba(0,0,0,.12)),linear-gradient(to bottom,rgba(0,0,0,0) 50%,rgba(0,0,0,.17) 50%);background-size:100% 100%,100% 4px;pointer-events:none;mix-blend-mode:screen;opacity:.8}
+  .screen::after{content:"";position:absolute;inset:-10%;background:radial-gradient(circle at center,rgba(255,255,255,.05) 0%,rgba(0,0,0,0) 55%);pointer-events:none;animation:flicker 7s infinite}
+  @keyframes flicker{0%,100%{opacity:.08}12%{opacity:.12}13%{opacity:.03}24%{opacity:.11}25%{opacity:.04}62%{opacity:.09}63%{opacity:.02}}
+  .topbar{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;font-size:12px;letter-spacing:.12em;color:var(--dim);border-bottom:1px solid rgba(140,255,155,.12);text-transform:uppercase}
+  .content{position:absolute;inset:42px 0 0 0;padding:18px;display:grid;grid-template-columns:1.3fr 1fr;gap:14px}
+  .panel{border:1px solid rgba(140,255,155,.12);background:rgba(0,0,0,.12);box-shadow:inset 0 0 18px rgba(140,255,155,.04);overflow:hidden}
+  .panelhead{padding:10px 12px;border-bottom:1px solid rgba(140,255,155,.12);color:var(--bright);font-size:13px;letter-spacing:.12em;text-transform:uppercase}
+  
+  /* ALLOW NATIVE TEXT SELECTION FOR COPY-PASTE */
+  .log, .map, .inventory {
+    user-select: text !important;
+    -webkit-user-select: text !important;
+  }
+  
+  .log{height:calc(100% - 110px);overflow:auto;white-space:pre-wrap;word-break:break-word;text-shadow:var(--glow);font-size:15px;line-height:1.35;padding:14px}
+  .right{display:grid;grid-template-rows:1fr auto auto}
+  .map{height:100%;padding:14px;font-size:13px;line-height:1.3;white-space:pre-wrap;text-shadow:var(--glow);overflow-y:auto}
+  .inventory{padding:12px;font-size:13px;line-height:1.4;white-space:pre-wrap;text-shadow:var(--glow);border-top:1px solid rgba(140,255,155,.12)}
+  .inputrow{grid-column:1 / -1;display:flex;align-items:center;gap:10px;border-top:1px solid rgba(140,255,155,.12);padding-top:12px;font-size:17px;text-shadow:var(--glow)}
+  .prompt{color:var(--bright);white-space:nowrap} input{flex:1;background:transparent;border:none;outline:none;color:var(--text);font:inherit;text-shadow:var(--glow);caret-color:var(--bright)} .cursor{display:inline-block;width:10px;height:18px;background:var(--text);box-shadow:var(--glow);animation:blink 1s step-end infinite;transform:translateY(3px)} @keyframes blink{50%{opacity:0}}
+  .scan{position:absolute;inset:0;pointer-events:none;background:linear-gradient(to bottom,rgba(255,255,255,.04),rgba(255,255,255,0) 20%,rgba(0,0,0,0) 80%,rgba(0,0,0,.08));mix-blend-mode:screen;animation:scanmove 8s linear infinite;opacity:.12} @keyframes scanmove{from{transform:translateY(-100%)}to{transform:translateY(100%)}}
+  .dim{color:var(--dim)} .bright{color:var(--bright)} .warn{color:var(--warn)} .bad{color:var(--bad)} .title{color:var(--bright);font-size:20px;letter-spacing:.15em}
+  
+  .alarm-active {
+    --text: #ff6b6b; --dim: #b33939; --bright: #ffb3b3; --warn: #ffd36b;
+    --glow: 0 0 8px rgba(255,107,107,.8), 0 0 24px rgba(255,107,107,.3);
+    border-color: rgba(255,107,107,0.7) !important;
+    box-shadow: 0 0 80px rgba(255,0,0,0.4), inset 0 0 50px rgba(255,0,0,0.15) !important;
+    animation: pulse-red 2s infinite alternate;
+  }
+  @keyframes pulse-red { from { background: rgba(15,3,3,0.98); } to { background: rgba(30,5,5,0.98); } }
+</style>
+</head>
+<body>
+  <div class="screen" id="screen_wrapper">
+    <div class="topbar">
+      <div>NEON//CLI: ENTERPRISE INTERCEPT</div>
+      <div id="clock">00:00:00 ZULU</div>
+      <div id="counter-display" class="dim">IDS ALERTS: 0/3</div>
+      <div id="status">SYS_LINK: ACTIVE</div>
+    </div>
+    <div class="content">
+      <div class="panel">
+        <div class="panelhead">Console Terminal</div>
+        <div id="log" class="log"></div>
+      </div>
+      <div class="panel right">
+        <div class="panelhead">Topology Map & HUD Analytics <br> 
+          1. Explore hacked machine. Gain Access to File Server 1 (FS_1).<br> 
+          2. Explore File Server FS_1.<br> 
+          3. Access the Router and allow access to other file shares.<br> 
+          4. Review File Server Files to get access to DC.<br> 
+          5. Login to DC and Run Crackmap.exe on the SAM File.<br> 
+          6. Use Cracked Credential to get access to the "Secured Share" on the file server.<br> 
+          7. Review Classified Documents.
+        </div>
+        <div id="map" class="map"></div>
+        <div id="objectives" class="inventory"></div>
+        <div id="inventory" class="inventory"></div>
+      </div>
+      <div class="inputrow">
+        <span id="prompt" class="prompt">C:\BREACHED PC&gt;</span>
+        <input id="cmd" autocomplete="off" spellcheck="false" />
+        <span class="cursor"></span>
+      </div>
+    </div>
+    <div class="scan"></div>
+  </div>
+
+  <div id="winModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:100; align-items:center; justify-content:center; backdrop-filter:blur(4px);">
+    <div style="background:#031006; border:2px solid #8cff9b; padding:30px; border-radius:12px; text-align:center; box-shadow:0 0 30px rgba(140,255,155,0.4); max-width:500px; width:90%;">
+      <h1 style="color:#d6ffe0; margin-top:0; font-family:'Courier New',monospace; letter-spacing:3px;">CLASSIFIED EXFILTRATION COMPLETE</h1>
+      <p style="color:#8cff9b; font-size:18px; font-family:'Courier New',monospace; margin:20px 0;">All target assets compromised, network firewalls bypassed, and classified files decrypted successfully.</p>
+      <div style="background:rgba(140,255,155,0.1); border:1px dashed #8cff9b; padding:15px; font-size:16px; color:#ffd36b; font-weight:bold; word-break:break-all; font-family:'Courier New',monospace;" id="modalFlag"></div>
+      <button onclick="document.getElementById('winModal').style.display='none'" style="margin-top:25px; background:transparent; border:1px solid #8cff9b; color:#8cff9b; padding:10px 24px; font-family:'Courier New',monospace; cursor:pointer; font-size:16px; border-radius:4px; text-shadow:0 0 5px rgba(140,255,155,0.5);">CLOSE TERMINAL</button>
+    </div>
+  </div>
+
+<script>
+const log = document.getElementById('log');
+const cmd = document.getElementById('cmd');
+const clockEl = document.getElementById('clock');
+const counterEl = document.getElementById('counter-display');
+const statusEl = document.getElementById('status');
+const mapEl = document.getElementById('map');
+const objectivesEl = document.getElementById('objectives');
+const inventoryEl = document.getElementById('inventory');
+const promptEl = document.getElementById('prompt');
+const screenWrapper = document.getElementById('screen_wrapper');
+
+const ipTable = {
+  '10.0.4.1': 'ROUTER', '10.0.4.2': 'SWITCH',
+  '10.0.4.11': 'FS_1',  '10.0.4.12': 'FS_2',  '10.0.4.13': 'FS_3',
+  '10.0.4.14': 'FS_4',  '10.0.4.15': 'FS_5',  '10.0.4.100': 'DC'
+};
+
+const cmdHistory = [];
+let historyIdx = -1;
+
+const state = {
+  location: 'LOCAL',       
+  ciscoMode: 'USER',       
+  authNode: null,          
+  shareAuth: null,         
+  routerBypassed: false,
+  foundFs1Creds: false, 
+  exploredFs1: false,
+  foundDcCreds: false,     
+  dcCracked: false,        
+  fs4Unlocked: false,      
+  gameOver: false,
+  consecutiveFails: 0,
+  idsAlerts: 0,             // UNIFIED IDS TRACKER
+  blockedSshAttempts: 0,
+  decryptedFiles: { FS_2: false, FS_3: false, FS_4: false, FS_5: false },
+  dcUnlocked: false,
+  alarm: false
+};
+
+const boot = [
+  "CLI CONSOLE ONLINE // FIRMWARE v10.4.0",
+  "ESTABLISHING LOCAL VIRTUAL INTERFACE...",
+  "READY."
+];
+const mission = [
+  "============================================================",
+  "MISSION UPDATE: Infiltrate Enterprise Cluster & Exfiltrate Intel",
+  "  - Connect using STRICT SSH syntax (e.g., ssh admin@10.0.4.11).",
+  "  - Ensure to discover connectivity vectors via ping and nmap.",
+  "  - WARNING: Remote target Linux server arrays are CASE-SENSITIVE.",
+  "  - The Domain Controller (DC) utilizes Windows controls (dir, type).",
+  "  - System allows up to 2 policy alert marks before complete lockdown occurs (3rd trips alarm).",
+  "  - If system security locks down, execute 'reset connection' to clear.",
+  "============================================================"
+];
+
+function add(t,c=''){const d=document.createElement('div'); if(c) d.className=c; d.textContent=t; log.appendChild(d); log.scrollTop=log.scrollHeight;}
+function write(lines, delay=25, done){let i=0; const tick=()=>{if(i<lines.length){add(lines[i], i<1?'title':''); i++; setTimeout(tick,delay);} else if(done) done();}; tick();}
+
+function renderMap(){
+  const lineLink = state.routerBypassed 
+    ? "                                   ||||| (INTER-VLAN ROUTING ACTIVE)" 
+    : "          | (ACL BLOCK: INBOUND DROP)";
+
+  const labelRow = state.routerBypassed
+    ? "       (ONLINE)    (ONLINE)    (ONLINE)    (ONLINE)    (ONLINE)"
+    : "       (ONLINE)   [BLOCKED]   [BLOCKED]   [BLOCKED]   [BLOCKED]";
+
+  mapEl.textContent = [
+    "=[ NET-TOPOLOGY ARCHITECTURE ]=",
+    "",
+    " [ROUTER:10.0.4.1]----[SWITCH:10.0.4.2]----[DC:10.0.4.100]",
+    lineLink,
+    "",
+    "         Fa0/1       Fa0/2       Fa0/3       Fa0/4       Fa0/5",
+    "           |           |           |           |           |",
+    "        [FS_1]      [FS_2]      [FS_3]      [FS_4]      [FS_5]",
+    "      10.0.4.11   10.0.4.12   10.0.4.13   10.0.4.14   10.0.4.15",
+    labelRow,
+    "",
+    "== INTERFACE METRICS ==",
+    `Current Node   : ${state.location}`,
+    `Router State   : ${state.routerBypassed ? 'FORWARDING (ANY ANY)' : 'ACL RESTRICTION ENGAGED'}`,
+    `Secure Assets  : ${state.routerBypassed ? 'UNLOCKED / REACHABLE' : 'FIREWALL BLOCK ACTIVE'}`
+  ].join('\n');
+}
+
+function updateHUD() {
+  let count = Object.values(state.decryptedFiles).filter(Boolean).length;
+
+  let objText = `<span class="bright">ACTIVE DIRECTIVES</span>\n`;
+  objText += `${state.location !== 'LOCAL' || state.foundFs1Creds ? '[X]' : '[ ]'} 1. Explore hacked machine. Gain Access to File Server 1 (FS_1).\n`;
+  objText += `${state.exploredFs1 ? '[X]' : '[ ]'} 2. Explore File Server FS_1.\n`;
+  objText += `${state.routerBypassed ? '[X]' : '[ ]'} 3. Access the Router and allow access to other file shares.\n`;
+  objText += `${state.foundDcCreds ? '[X]' : '[ ]'} 4. SSH to FS_2-5 and Decrypt credentials ('decrypt shadow') (${count}/4).\n`;
+  objText += `${state.dcCracked ? '[X]' : '[ ]'} 5. Login to DC and Run Crackmap.exe on the SAM File.\n`;
+  objText += `${state.fs4Unlocked ? '[X]' : '[ ]'} 6. Use Cracked Credential to get access to the "Secured Share" on the file server.\n`;
+  objText += `${state.gameOver ? '[X]' : '[ ]'} 7. Review Classified Documents.`;
+  objectivesEl.innerHTML = objText;
+
+  let invText = `<span class="bright">INTEL REPOSITORY VALUABLE VAULT</span>\n`;
+  invText += `- File Server Profiles : ${state.foundFs1Creds ? 'admin / admin' : 'UNKNOWN'}\n`;
+  invText += `- Core Cisco Logins    : ${state.exploredFs1 ? 'netadmin / cisco123' : 'UNKNOWN'}\n`;
+  invText += `- Enterprise DC Logins : ${state.foundDcCreds ? 'administrator / DomainKing2026' : 'RECOVERY IN PROGRESS ('+count+'/4)'}\n`;
+  invText += `- Secured Share Pass   : ${state.dcCracked ? 'admin / VaultPass2026!' : 'LOCKED'}`;
+  inventoryEl.innerHTML = invText;
+}
+
+function syncPrompt() {
+  if (state.authNode || state.shareAuth) return; 
+  if (state.alarm) {
+    promptEl.textContent = "[ALARM-LOCKDOWN]> ";
+    return;
+  }
+  if (state.location === 'LOCAL') {
+    promptEl.textContent = "C:\\BREACHED PC> ";
+  } else if (state.location === 'DC') {
+    promptEl.textContent = "C:\\Users\\administrator> ";
+  } else if (state.location === 'ROUTER') {
+    if (state.ciscoMode === 'USER') promptEl.textContent = "ROUTER> ";
+    else if (state.ciscoMode === 'PRIV') promptEl.textContent = "ROUTER# ";
+    else if (state.ciscoMode === 'CONF') promptEl.textContent = "ROUTER(config)# ";
+    else if (state.ciscoMode === 'INT') promptEl.textContent = "ROUTER(config-subif)# ";
+  } else if (state.location === 'SWITCH') {
+    promptEl.textContent = "SWITCH> ";
+  } else {
+    promptEl.textContent = `[root@${state.location} ~]# `;
+  }
+}
+
+function triggerAlarm(reason) {
+  state.alarm = true;
+  state.idsAlerts = 3; // Force counter to display 3/3 on full lockdown
+  screenWrapper.classList.add('alarm-active');
+  add("\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!", "bad");
+  add(`[CRITICAL SECURITY ALERT] ${reason}`, "bad");
+  add("IDS INDICATORS TRIPPED // LOCAL TERMINAL IS BLOCKED", "bad");
+  add("EXECUTE COMMAND 'reset connection' TO INITIATE EMERGENCY WORKSTATION FLUSH.", "warn");
+  add("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n", "bad");
+  status();
+}
+
+function status(){
+  statusEl.textContent = state.alarm ? 'ALARM: SECURITY LOCKDOWN' : 'SYS_LINK: ACTIVE'; 
+  counterEl.textContent = `IDS ALERTS: ${state.idsAlerts}/3`;
+  counterEl.className = state.idsAlerts === 0 ? 'dim' : (state.idsAlerts === 1 ? 'warn' : 'bad');
+  renderMap(); updateHUD(); syncPrompt();
+}
+
+// -------------------------------------------------------------
+// SECURE FILE SYSTEM MAPPING
+// Keys are realistic filenames, Values are the actual contents
+// "HONEYPOT_TRIGGER" is the backend flag that triggers the alarm
+// -------------------------------------------------------------
+const fileSystem = {
+  LOCAL: {
+    'STAGING_NODES.LOG': "\n IP Assignment Manifest:\nFS_1 -> File Server FS_1 10.0.4.11 \n log: 10/01/2050 File Server ERROR \n log: 10/02/2050 File Server ERROR \n log: 10/02/2050 File Server REBOOT\n log: 10/02/2050 File Server Online \n log: 10/03/2050 File Server Error\n log: 10/04/2050 File server has been reset to factory defaults \n log: 10/04/2050 File server Online \n\n" ,
+    'New_Server.txt': "\n File server instructions.  - For new File server setups only.  \n 1. Login to server manager \n 2. Add the File Server Role to the server \n 3. Create folders, assign quotas and add the folder to the correct groups\n\n" ,
+	'Admin_Logs.TXT': "\nEngineer Notes: \n\n The File server FS_1 isnt working right again.  I'll have to rebuild it since we were locked out.  I changed the SSH logins back to the defaults until we can circle back to this.\n\nUser: admin\nPass: admin"
+  },
+  FS_1: {
+    'SystemFile.txt': "Log Network Administration Profile Access:\n\nrefer to the technical documtation to set up cron jobs",
+    'README.txt': "Welcome to File Server 1. Sector maintenance pipeline initialization routines standard.",
+    'network_diagram.txt': "Core layout metrics mapping point routes through gateway 10.0.4.1 interface blocks.",
+    'backup_log.log': "Log flush routine complete. 0 structural data block errors reported during verification sequence.",
+    'ip_planning.csv': "VLAN_10: Production, VLAN_100: Core Secure Cluster Data Enclave Infrastructure.",
+	'sys_maintenance.txt': "Network Administration Profile Access:\n\nAccess to the network switch and router are using the default Creds until the vendor can get in and change them.  The defaults are: \n\nUser: netadmin\nPass: cisco123",
+    'temp_scripts.sh': "#!/bin/bash\necho 'Initializing staging pipeline sequence verify... Ready.'",
+    'motd.txt': "AUTHORIZED CORPORATE ENTERPRISE PERSISTENCE LAYERS ONLY. UNSANCTIONED ARTIFACT PROBES PROHIBITED.",
+	'banner.txt': "Property of Core Corporation. Security monitoring systems currently active over network sockets.",
+    'route_tables.txt': "Destination 0.0.0.0/0 via interface GigabitEthernet0/1.10 forwarding metric 10.",
+    'dns_cache.txt': "dc.core.internal resolved over loopback lookup context pointer reference layer indices.",
+    'corporate_salaries_2026.bak': "HONEYPOT_TRIGGER"
+  },
+  FS_2: { 
+    'shadow.bak': "root:$6$1a2b3c4d5e...:19001:0:99999:7::: [SYSTEM HASH LOCKED]",
+    'employee_dir.csv': "ID,Name,Dept\n101,A. Smith,HR\n102,B. Jones,Sales\n103,C. Davis,DevOps",
+    'Q1_report.txt': "Financial growth trends verify positive growth matrices across primary tech distribution funnels.",
+    'notes.txt': "Remind team to complete legacy file index migrations prior to infrastructure security updates.",
+    'meeting_minutes.md': "- Infrastructure overhaul set for next fiscal sprint.\n- Patch active firewalls.",
+    'tasks.log': "Task ID 404: Corrupted file headers resolved over routine structural disk health sweeps.",
+    'archive_list.txt': "Historical record pointers moved successfully into offline tape array standard protocols.",
+    'test_data.dat': "ASCII:: 41 42 43 44 45 46 47 48 49 50 51 52 53 54 55 56 57 58 59 60 61",
+    'public_key.pub': "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC3f3GjKlO7... infrastructure_key_v4",
+    'config.json': '{"env": "production", "cluster_size": 12, "failover_redundancy": true}',
+    'database_root_passwords.txt': "HONEYPOT_TRIGGER"
+  },
+  FS_3: { 
+    'shadow.bak': "root:$6$9f8e7d6c5b...:19001:0:99999:7::: [SYSTEM HASH LOCKED]",
+    'sys_config_backup.txt': "SYSTEM CONFIGURATION MEMORANDUM:\nDomain services backup token deployed successfully.",
+    'inventory.csv': "Item_SKU,Count,Warehouse_Loc\nSKU-991,450,Aisle-4A\nSKU-112,89,Aisle-12B",
+    'shipping.log': "Batch delivery verification token processed through upstream inventory supply relays.",
+    'vendor_ids.txt': "VND-001: Logistics Core\nVND-002: Alpha Machining Supply\nVND-003: Delta Power Integrations",
+    'supply_order.xml': "<order><id>4920</id><item>Server Chassis</item><qty>24</qty></order>",
+    'manifest.txt': "Hardware allocation parameters verified for localized core cluster expansion targets.",
+    'SOP_guide.pdf': "[PDF Binary stream header data string index context] - Storage Policy Protocol Rules.",
+    'temp.txt': "Temporary storage container for processing raw transactional ledger datasets safely.",
+    'asset_tags.csv': "Asset_Tag,Serial_Num,Owner\nAST-8821,SN-991023,Core_Infrastructure\nAST-8822,SN-991024,HR_Laptop",
+    'notes_old.txt': "Legacy backup configurations stored on regional file allocation systems are deprecated.",
+    'private_ssh_keys.cfg': "HONEYPOT_TRIGGER"
+  },
+  FS_4: { 
+    'shadow.bak': "root:$6$5a6b7c8d9e...:19001:0:99999:7::: [SYSTEM HASH LOCKED]",
+    'client_list.csv': "Client_UID,Company_Name,Tier\nCLI-01,Nexus Tech,Gold\nCLI-02,Apex Media,Silver",
+    'project_alpha.txt': "Development parameters for enterprise cloud hosting microservice frameworks optimized.",
+    'timeline.md': "# Milestone Schedule\n- Phase 1: Complete\n- Phase 2: Testing\n- Phase 3: Rollout",
+    'budget_draft.xls': "Row indices mapping primary resource tracking accounts against quarterly development spend budgets.",
+    'resource_alloc.txt': "Compute resource limits adjusted: Core allocation thresholds capped at 85% processing capacity.",
+    'scrum_notes.log': "Daily standup checklist: Database optimization queries updated to resolve latency spikes.",
+    'feedback.txt': "Client reporting tools running natively on secondary instances are performing optimally.",
+    'contacts.txt': "Support Desk escalation pipelines mapped to level-3 engineering response groups.",
+    'todo.txt': "Update documentation files regarding local partition recovery paths during failures.",
+    'secured_share': "[DIRECTORY SHARED STORAGE OVERLAY] - Enter path variables or folder to open authentication gates.",
+    'executive_payout_manifest.xlsx': "HONEYPOT_TRIGGER"
+  },
+  FS_5: { 
+    'shadow.bak': "root:$6$2b4d6f8a9c...:19001:0:99999:7::: [SYSTEM HASH LOCKED]",
+    'policy_v2.txt': "Corporate acceptable use guidelines strictly enforce secure password rotation protocols.",
+    'compliance.md': "Audit preparation matrix tracking internal logical asset access policies for alignment.",
+    'audit_log.csv': "Timestamp,Actor,Event_ID,Status\n2026-05-18T14:22:01,System,1002,Success",
+    'training_sop.txt': "Standard employee access onboarding documentation mapping security tracking requirements.",
+    'handbook.txt': "Employee security response standards regarding dynamic situational network incident triage.",
+    'legal_notice.txt': "Proprietary information systems property protection guidelines enforce monitoring overhead.",
+    'system_err.log': "Warning state tracked on virtual logical interface cluster stack layer 2 resolved.",
+    'version_control.log': "Git repository tracking deployment scripts moved to main branches for staging execution.",
+    'backup_conf.ini': "[Backups]\nRetentionDays=30\nTargetLocation=\\\\\\storage\\bak_vault\\\nCompress=True",
+    'admin_recovery_override.backup': "HONEYPOT_TRIGGER"
+  },
+  DC: { 
+    'sam.hive': "SAM Active Directory Storage File Dump (Contains enterprise group accounts structure blocks).",
+    'crackmap.exe': "Domain Password Audit Utility. Binary ready. Run: crackmap.exe [target_file]"
+  }
+};
+
+function executePing(target) {
+  if (!target) { add("ping: missing host operand", "bad"); return; }
+  let cleanTarget = target.toUpperCase();
+  if (ipTable[cleanTarget]) cleanTarget = ipTable[cleanTarget];
+
+  const validHosts = ['ROUTER', 'SWITCH', 'FS_1', 'FS_2', 'FS_3', 'FS_4', 'FS_5', 'DC'];
+  
+  let displayIp = target;
+  if (validHosts.includes(cleanTarget)) {
+    let octet = '1';
+    if(cleanTarget==='ROUTER') octet='1';
+    else if(cleanTarget==='SWITCH') octet='2';
+    else if(cleanTarget==='FS_1') octet='11';
+    else if(cleanTarget==='FS_2') octet='12';
+    else if(cleanTarget==='FS_3') octet='13';
+    else if(cleanTarget==='FS_4') octet='14';
+    else if(cleanTarget==='FS_5') octet='15';
+    else if(cleanTarget==='DC') octet='100';
+    displayIp = `10.0.4.${octet}`;
+  }
+
+  if (!validHosts.includes(cleanTarget) && !target.match(/^[0-9.]+$/)) {
+     add(`ping: ${target}: Name or service not known`, "bad");
+     return;
+  }
+
+  add(`PING ${target} (${displayIp}) 56(84) bytes of data.`);
+  
+  const isSecureAsset = ['FS_2', 'FS_3', 'FS_4', 'FS_5', 'DC'].includes(cleanTarget);
+  const isBlocked = isSecureAsset && !state.routerBypassed && state.location !== 'ROUTER';
+  const isUnknown = !validHosts.includes(cleanTarget);
+
+  if (isBlocked || isUnknown) {
+    let count = 0;
+    const interval = setInterval(() => {
+      if (isBlocked) {
+         add("From 10.0.4.1 icmp_seq=1 Packet filtered: Destination Host Unreachable", "bad");
+      } else {
+         add(`From ${displayIp} icmp_seq=${count+1} Destination Host Unreachable`, "bad");
+      }
+      count++;
+      if (count >= 4) {
+        clearInterval(interval);
+        add(`--- ${target} ping statistics ---`);
+        add("4 packets transmitted, 0 received, 100% packet loss, time 3012ms\n");
+      }
+    }, 100);
+  } else {
+    let count = 0;
+    const interval = setInterval(() => {
+      add(`64 bytes from ${displayIp}: icmp_seq=${count+1} ttl=64 time=0.421 ms`, "bright");
+      count++;
+      if (count >= 4) {
+        clearInterval(interval);
+        add(`--- ${target} ping statistics ---`);
+        add("4 packets transmitted, 4 received, 0% packet loss, time 2999ms\n");
+      }
+    }, 100);
+  }
+}
+
+function executeNmap(target) {
+  if (!target) { add("nmap: target or address variable required.", "bad"); return; }
+  let cleanTarget = target.toUpperCase();
+  if (ipTable[cleanTarget]) cleanTarget = ipTable[cleanTarget];
+
+  add(`Starting Nmap 7.92 ( https://nmap.org ) at ${new Date().toISOString().split('T')[0]} 12:00 UTC`);
+  
+  const validHosts = ['ROUTER', 'SWITCH', 'FS_1', 'FS_2', 'FS_3', 'FS_4', 'FS_5', 'DC'];
+  
+  if (!validHosts.includes(cleanTarget) && !target.match(/^[0-9.]+$/)) {
+     add(`Failed to resolve "${target}".\nWARNING: No targets were specified, so 0 hosts scanned.`, "bad");
+     return;
+  }
+
+  add(`Nmap scan report for ${target}`);
+  
+  const isSecureAsset = ['FS_2', 'FS_3', 'FS_4', 'FS_5', 'DC'].includes(cleanTarget);
+  const isUnknown = !validHosts.includes(cleanTarget);
+
+  if (isUnknown) {
+    add("Note: Host seems down. If it is really up, but blocking our ping probes, try -Pn");
+    add("Nmap done: 1 IP address (0 hosts up) scanned in 3.02 seconds\n");
+  } else if (isSecureAsset && !state.routerBypassed) {
+    add("Host is up, but matching firewall controls dropped all probes.");
+    add("All 1000 scanned ports on host are filtered (no-response).\n");
+  } else {
+    add("Host is up (0.00052s latency).");
+    add("Not shown: 999 closed ports");
+    add("PORT     STATE SERVICE");
+    if (cleanTarget === 'ROUTER') {
+      add("22/tcp   open  ssh");
+      add("23/tcp   open  telnet");
+    } else if (cleanTarget === 'DC') {
+      add("22/tcp   open  ssh");
+      add("445/tcp  open  microsoft-ds");
+    } else {
+      add("22/tcp   open  ssh");
+      add("80/tcp   open  http");
+    }
+    add("");
+  }
+}
+
+function displayRunningConfig() {
+  const aclConfig = state.routerBypassed 
+    ? "!" 
+    : " ip access-group BLOCK_CORE_TRAFFIC in\n ! [CRITICAL AMENDMENT HINT:\n ! You can remove the ACL from inside interface gi0/1.100 OR simply run 'no ip access-group BLOCK_CORE_TRAFFIC' on the sub-interface,\n ! OR remove it altogether at global config using 'no ip access-list extended BLOCK_CORE_TRAFFIC']";
+
+  add(`Building configuration...\n
+Current configuration : 1820 bytes
+!
+interface GigabitEthernet0/1.10
+ description Production Gateway System
+ ip address 10.0.4.1 255.255.255.0
+!
+interface GigabitEthernet0/1.100
+ description Core Secure Subnet Gateway Asset Cluster
+ ip address 10.0.100.1 255.255.255.0
+${aclConfig}
+!
+ip access-list extended BLOCK_CORE_TRAFFIC
+ deny ip any 10.0.100.0 0.0.0.255
+ permit ip any any
+!
+end`);
+}
+
+function handleSshCommand(args, clean) {
+  if (!args[1]) {
+    add("usage: ssh user@hostname_or_ip", "bad");
+    return;
+  }
+
+  let targetRaw = args[1];
+  
+  if (!targetRaw.includes('@')) {
+    add(`ssh: Malformed syntax. Secure proxy rules require user configuration profiles.`, "bad");
+    add(`Usage pattern: ssh user@hostname_or_ip`, "dim");
+    return;
+  }
+
+  let parts = targetRaw.split('@');
+  if (parts.length !== 2 || !parts[0] || !parts[1]) {
+    add("ssh: Could not resolve target validation format matrix.", "bad");
+    return;
+  }
+
+  let user = parts[0].toLowerCase(); 
+  let target = parts[1].toUpperCase();
+
+  if (ipTable[target]) target = ipTable[target];
+  if (target === 'LOCAL') { add("ssh: Connection to loopback target rejected.", "bad"); return; }
+  
+  if (target === 'SWITCH') {
+    add("Connecting to Cisco Layer 2 Switch Engine console interface environment...");
+    state.location = 'SWITCH'; status(); return;
+  }
+
+  if (['FS_2', 'FS_3', 'FS_4', 'FS_5', 'DC'].includes(target) && !state.routerBypassed && state.location !== 'ROUTER') {
+    add(`ssh: connect to host ${parts[1]} port 22: Connection timed out`, "bad");
+    state.blockedSshAttempts++;
+    if (state.blockedSshAttempts >= 3) {
+      state.blockedSshAttempts = 0; 
+      state.idsAlerts++;
+      if (state.idsAlerts >= 3) {
+        triggerAlarm("CRITICAL INSTANCE DEFENSE RESPONSE: Repeated unauthorized network probing blocked by firewall rules.");
+      } else {
+        add(`\n[!] SECURITY LOG ALERT: Multiple blocked connection attempts to core infrastructure logged by IDS.`, "warn");
+        add(`    Alert level incremented: (${state.idsAlerts}/3) violations before automatic lockdown.\n`, "warn");
+      }
+    }
+    status(); return;
+  }
+
+  if (target === 'FS_1' || target === 'ROUTER' || target === 'DC' || ['FS_2', 'FS_3', 'FS_4', 'FS_5'].includes(target)) {
+    state.authNode = { node: target, user: user, rawTarget: targetRaw };
+    promptEl.textContent = `${user}@${parts[1]}'s password: `;
+    cmd.type = "password";
+    return;
+  }
+
+  add(`ssh: Could not resolve hostname ${parts[1]}: Name or service not known`, "bad");
+}
+
+function processCommand(raw){
+  const clean = raw.trim();
+  const lowerClean = clean.toLowerCase();
+
+  if (lowerClean === 'reset connection') {
+    state.alarm = false; state.consecutiveFails = 0; state.idsAlerts = 0; state.blockedSshAttempts = 0;
+    state.location = 'LOCAL'; state.authNode = null; state.shareAuth = null;
+    cmd.type = "text"; cmd.disabled = false; screenWrapper.classList.remove('alarm-active');
+    log.innerHTML = '';
+    add("------------------------------------------------------------------------");
+    add("[STATUS RESET] EMERGENCY MANAGEMENT CONSOLE RESET ROUTINES EXECUTED.");
+    add("Session configurations purged. Network socket link refreshed.");
+    add("------------------------------------------------------------------------\n");
+    write(mission, 15); status(); return;
+  }
+
+  if (state.alarm) {
+    add("CONSOLE IS LOCKED. UNABLE TO COMPILATE INPUT IN ALARM STATUS.", "bad");
+    add("Execute 'reset connection' to restore control interface.", "warn");
+    return;
+  }
+  
+  // --- PASSWORD CHOKEPOINT FOR SSH ---
+  if (state.authNode) {
+    // Exact number of asterisks as user input
+    add(`${promptEl.textContent}${'*'.repeat(clean.length)}`, 'dim'); 
+    
+    let success = false;
+    const targetNode = state.authNode.node;
+    const username = state.authNode.user;
+    
+    // SECURITY CHOKEPOINT CLEANSE: Force precise comparisons
+    const passInput = clean.replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
+    
+    if (['FS_1', 'FS_2', 'FS_3', 'FS_4', 'FS_5'].includes(targetNode) && username === 'admin' && passInput === 'admin') success = true;
+    if (targetNode === 'ROUTER' && username === 'netadmin' && passInput === 'cisco123') success = true;
+    if (targetNode === 'DC' && username === 'administrator' && passInput === 'DomainKing2026' && state.dcUnlocked) success = true;
+    
+    cmd.type = "text"; 
+    state.authNode = null;
+    
+    if (success) {
+      add(`Welcome to ${targetNode} Core Shell. Open terminal interface link verified.`, "bright");
+      state.location = targetNode;
+      state.consecutiveFails = 0; 
+      if (targetNode === 'ROUTER') state.ciscoMode = 'USER';
+    } else {
+      add("Permission denied, please try again.", "bad");
+      state.consecutiveFails++;
+      if (state.consecutiveFails >= 2) {
+        state.consecutiveFails = 0;
+        state.idsAlerts++;
+        if (state.idsAlerts >= 3) {
+          triggerAlarm("MULTIPLE CONSECUTIVE AUTHENTICATION FAILURES DETECTED.");
+        } else {
+          add(`\n[!] SECURITY LOG ALERT: Consecutive authentication failures tracked by host IDS.`, "warn");
+          add(`    Alert level incremented: (${state.idsAlerts}/3) triggers before total lockout.\n`, "warn");
+        }
+      }
+    }
+    status(); return;
+  }
+
+  // --- PASSWORD CHOKEPOINT FOR FS_4 SECURED SHARE ---
+  if (state.shareAuth) {
+    if (state.shareAuth.step === 'USER') {
+      add(`Enter Username: ${clean}`, 'dim');
+      state.shareAuth.username = clean;
+      state.shareAuth.step = 'PASS';
+      promptEl.textContent = "Enter Password: ";
+      cmd.type = "password";
+    } else if (state.shareAuth.step === 'PASS') {
+      // Exact number of asterisks as user input
+      add(`Enter Password: ${'*'.repeat(clean.length)}`, 'dim');
+      cmd.type = "text";
+      if (state.shareAuth.username === 'admin' && clean === 'VaultPass2026!') {
+        state.fs4Unlocked = true;
+        add("\n[+] ACCESS GRANTED. MOUNTING SECURED DATA REPOSITORY VAULT LAYER...", "bright");
+        add("Available Files Inside:\n -> classified_documents.txt", "bright");
+      } else {
+        add("[-] ACCESS DENIED: Invalid Cryptographic Token or Identity.", "bad");
+        state.idsAlerts++;
+        if (state.idsAlerts >= 3) {
+          triggerAlarm("IDS BLOCK DETECTED: Unauthorized brute-force profiling against cluster vault files.");
+        } else {
+          add(`\n[!] SECURITY ALERT: Failed secure vault authentication tracked by IDS.`, "warn");
+          add(`    Alert level incremented: (${state.idsAlerts}/3) triggers before total lockout.\n`, "warn");
+        }
+      }
+      state.shareAuth = null;
+    }
+    status(); return;
+  }
+
+  if(!clean) return;
+  cmdHistory.push(clean); historyIdx = cmdHistory.length;
+  add(`${promptEl.textContent}${clean}`, 'dim');
+
+  const activeLoc = state.location;
+
+  // ==========================================
+  // --- LOCAL ENVIRONMENT (WINDOWS COMMANDS) ---
+  // ==========================================
+  if (activeLoc === 'LOCAL') {
+    const args = clean.split(' '); const cmdRoot = args[0].toUpperCase();
+    if (cmdRoot === 'CLEAR' || cmdRoot === 'CLS') { log.innerHTML = ''; return; }
+    if (cmdRoot === 'WHOAMI') { add("neon_breacher_v10_console"); return; }
+    if (cmdRoot === 'PING') { executePing(args[1]); return; }
+    if (cmdRoot === 'NMAP') { executeNmap(args[1]); return; }
+    if (cmdRoot === 'HELP') {
+      add("OPERATIONAL COMMAND LAYERS:\n  dir              - List local device directories.\n  type [file]      - View a file array registry contents.\n  ping [ip]        - Send ICMP network transmission vectors.\n  nmap [ip]        - Conduct structural port state mapping.\n  ssh user@IP      - Open remote node network pipeline channel.");
+      return;
+    }
+    if (cmdRoot === 'DIR') {
+      add(Object.keys(fileSystem.LOCAL).join('\n')); status(); return;
+    }
+    if (cmdRoot === 'TYPE') {
+      if (!args[1]) { add("The syntax of the command is incorrect.", "bad"); return; }
+      const targetFile = args[1].toLowerCase(); 
+      const matchKey = Object.keys(fileSystem.LOCAL).find(k => k.toLowerCase() === targetFile);
+      if (matchKey) {
+        add(fileSystem.LOCAL[matchKey]);
+        if (matchKey.toUpperCase() === 'ADMIN_LOGS.TXT') state.foundFs1Creds = true;
+      } else {
+        add("The system cannot find the file specified.", "bad");
+      }
+      status(); return;
+    }
+    if (cmdRoot === 'SSH') { handleSshCommand(args, clean); return; }
+    add(`'${args[0]}' is not recognized as an internal or external command, operable program or batch file.`, "bad"); return;
+  }
+
+  // ==========================================
+  // --- DOMAIN CONTROLLER (WINDOWS COMMANDS) ---
+  // ==========================================
+  if (activeLoc === 'DC') {
+    const args = clean.split(' '); const cmdRoot = args[0].toUpperCase();
+    if (cmdRoot === 'CLEAR' || cmdRoot === 'CLS') { log.innerHTML = ''; return; }
+    if (cmdRoot === 'WHOAMI') { add("core\\administrator"); return; }
+    if (cmdRoot === 'PING') { executePing(args[1]); return; }
+    if (cmdRoot === 'NMAP') { executeNmap(args[1]); return; }
+    if (cmdRoot === 'HELP') {
+      add("WINDOWS COMMAND LINE UTILITIES:\n  dir              - Displays a list of files and subdirectories.\n  type [file]      - Displays the contents of a text file.\n  crackmap.exe     - Executable binary. run: crackmap.exe <targetfile>.\n  ping / nmap [ip] - Network diagnosis tools.\n  exit             - Terminates the SSH session.");
+      return;
+    }
+    if (cmdRoot === 'DIR') {
+      add(Object.keys(fileSystem.DC).join('\n')); status(); return;
+    }
+    if (cmdRoot === 'TYPE') {
+      if (!args[1]) { add("The syntax of the command is incorrect.", "bad"); return; }
+      const targetFile = args[1].toLowerCase(); 
+      const matchKey = Object.keys(fileSystem.DC).find(k => k.toLowerCase() === targetFile);
+      if (matchKey) {
+        add(fileSystem.DC[matchKey]);
+      } else {
+        add("The system cannot find the file specified.", "bad");
+      }
+      status(); return;
+    }
+    if (cmdRoot === 'CRACKMAP.EXE' || cmdRoot === 'CRACKMAP') {
+      if (!args[1] || (args[1].toLowerCase() !== 'sam.hive' && args[1].toLowerCase() !== 'sam')) { add("Usage execution syntax pattern: crackmap.exe sam.hive", "bad"); return; }
+      state.dcCracked = true;
+      add("[*] INITIATING CRYPTO GRAPH ANALYSIS OVER NTDS INTERFACES...");
+      add("Parsing local domain user identities database hashes...");
+      add("CRACK STATUS SUCCESS // COMPROMISED GROUP POLICY TOKEN ISOLATED:", "bright");
+      add(" -> Identity: admin", "bright");
+      add(" -> Plaintext Plain Hash Word: VaultPass2026!", "bright");
+      status(); return;
+    }
+    if (cmdRoot === 'EXIT') {
+      add(`Connection to ${activeLoc} closed.`);
+      state.location = 'LOCAL'; status(); return;
+    }
+    add(`'${args[0]}' is not recognized as an internal or external command, operable program or batch file.`, "bad"); return;
+  }
+
+  // ==========================================
+  // --- ROUTER CISCO CORESHELL INTERFACE ---
+  // ==========================================
+  if (activeLoc === 'ROUTER') {
+    const fullLine = clean.toLowerCase();
+    if (fullLine.startsWith('ping ')) { executePing(clean.split(' ')[1]); return; }
+    if (fullLine.startsWith('nmap ')) { executeNmap(clean.split(' ')[1]); return; }
+    if (fullLine === 'show ip int br' || fullLine === 'sh ip int br' || fullLine === 'do show ip int br') {
+      add("Interface                  IP-Address      OK? Method Status                Protocol\n" +
+          "GigabitEthernet0/1         unassigned      YES unset  up                    up      \n" +
+          "GigabitEthernet0/1.10      10.0.4.1        YES manual up                    up      \n" +
+          "GigabitEthernet0/1.100     10.0.100.1      YES manual up                    up      ");
+      return;
+    }
+    if (fullLine === 'show run' || fullLine === 'sh run' || fullLine === 'show running-config' || fullLine.startsWith('do show run')) {
+      displayRunningConfig(); return;
+    }
+    if (fullLine === 'exit') {
+      if (state.ciscoMode === 'INT') { state.ciscoMode = 'CONF'; add("Exiting subinterface configuration mode."); }
+      else if (state.ciscoMode === 'CONF') { state.ciscoMode = 'PRIV'; add("Exiting configuration terminal."); }
+      else if (state.ciscoMode === 'PRIV') { state.ciscoMode = 'USER'; }
+      else { state.location = 'LOCAL'; add("Connection to ROUTER closed."); }
+      status(); return;
+    }
+    if (state.ciscoMode === 'USER') {
+      if (fullLine === 'enable' || fullLine === 'en') state.ciscoMode = 'PRIV';
+      else add("% Invalid command configuration block.", "bad");
+      status(); return;
+    }
+    if (state.ciscoMode === 'PRIV') {
+      if (fullLine === 'configure terminal' || fullLine === 'conf t' || fullLine === 'config t') state.ciscoMode = 'CONF';
+      else add("% Invalid command configuration block.", "bad");
+      status(); return;
+    }
+    if (state.ciscoMode === 'CONF') {
+      // INTERFACE BYPASS
+      if (fullLine === 'interface gigabitethernet0/1.100' || fullLine === 'int gi0/1.100' || fullLine === 'int g0/1.100') {
+        state.ciscoMode = 'INT';
+      } 
+      // REAL ROUTER GLOBAL CONFIG ACL DELETION BYPASS
+      else if (fullLine === 'no ip access-list extended block_core_traffic' || fullLine === 'no access-list block_core_traffic') {
+        state.routerBypassed = true;
+        add("GLOBAL ACL DEFINITION DELETED. PACKET FILTERS DISABLED VIA RUNTIME ENGINE.", "bright");
+        add("INTER-VLAN FORWARDING PIPELINES EXTENDED SYSTEM-WIDE.", "bright");
+      } else { add("% Command rejected at marker location.", "bad"); }
+      status(); return;
+    }
+    if (state.ciscoMode === 'INT') {
+      if (fullLine === 'no ip access-group block_core_traffic in' || fullLine === 'no ip access-group block_core_traffic' || fullLine === 'no access-list') {
+        state.routerBypassed = true;
+        add("ACL CONFIGURATION FLUSHED SUCCESSFULLY. PACKET FILTERS DISABLED.", "bright");
+        add("INTER-VLAN FORWARDING PIPELINES EXTENDED SYSTEM-WIDE.", "bright");
+      } else { add("% Cisco IOS command syntax execution error.", "bad"); }
+      status(); return;
+    }
+    return;
+  }
+
+  if (activeLoc === 'SWITCH') {
+    const fullLine = clean.toLowerCase();
+    if (fullLine === 'exit') { state.location = 'LOCAL'; add("Connection to SWITCH closed."); status(); return; }
+    add("SWITCH parameters constrained. Bypasses require Layer 3 Core Router rule flushing."); return;
+  }
+
+  // ==========================================
+  // --- LINUX FILE SERVERS (FS_1 - FS_5) ---
+  // ==========================================
+  const args = clean.split(' '); const cmdRoot = args[0]; 
+
+  if (cmdRoot === 'clear') { log.innerHTML = ''; return; }
+  if (cmdRoot === 'ping') { executePing(args[1]); return; }
+  if (cmdRoot === 'nmap') { executeNmap(args[1]); return; }
+  if (cmdRoot === 'help') {
+    add("LINUX KERNEL COMMAND MATRIX:\n  ls               - List files inside vector directory arrays.\n  cat [file]       - View unencrypted contents (STRICTLY CASE-SENSITIVE).\n  ping / nmap [ip] - Network diagnosis tools.\n  ssh user@IP      - Lateral movement link tool.\n  decrypt shadow   - Parse and extract password hashes from local shadow files.\n  exit             - Drop socket session.");
+    return;
+  }
+  if (cmdRoot === 'whoami') { add(activeLoc === 'FS_1' ? "admin" : "root"); return; }
+  if (cmdRoot === 'ls') {
+    const files = fileSystem[activeLoc];
+    if (files) {
+      Object.keys(files).forEach(f => {
+        if (f === 'secured_share') {
+          add("📁 secured_share", "warn");
+        } else {
+          add(f);
+        }
+      });
+    } else {
+      add("total 0");
+    }
+    return;
+  }
+  
+  if (cmdRoot === 'decrypt') {
+    if (!args[1] || args[1].toLowerCase() !== 'shadow') { add("usage: decrypt shadow", "bad"); return; }
+    if (['FS_2', 'FS_3', 'FS_4', 'FS_5'].includes(activeLoc)) {
+      if (state.decryptedFiles[activeLoc]) {
+        add("Shadow hash database data structures already completely analyzed.");
+      } else {
+        state.decryptedFiles[activeLoc] = true;
+        add(`CRACK STATUS // SUCCESS: Local administrator account hash isolated on ${activeLoc}.`, "bright");
+        
+        let count = Object.values(state.decryptedFiles).filter(Boolean).length;
+        if (count === 4) {
+          state.dcUnlocked = true;
+          state.foundDcCreds = true;
+          add("\n========================================================================", "warn");
+          add("[!] CROSS-REFERENCE ANALYSIS COMPLETE: PASSWORD REUSE DETECTED!", "warn");
+          add("Automated pass-the-hash spray verified a shared Local/Domain mapping:", "warn");
+          add("Target Domain Identity: administrator", "bright");
+          add("Target Domain Password: DomainKing2026", "bright");
+          add("========================================================================\n", "warn");
+        }
+      }
+    } else { add("decrypt: target system holds no local Linux shadow database architecture.", "bad"); }
+    status(); return;
+  }
+  
+  if (cmdRoot === 'cat') {
+    if (!args[1]) { add("cat: missing operand", "bad"); return; }
+    const targetFile = args[1]; 
+    const nodeFiles = fileSystem[activeLoc];
+    
+    if (activeLoc === 'FS_4' && targetFile === 'classified_documents.txt') {
+      if (!state.fs4Unlocked) {
+        add("cat: classified_documents.txt: Permission denied. Vault block active.", "bad");
+      } else {
+        state.gameOver = true; const flagStr = "FLAG{NET_PIPELINE_ROUTER_ACL_BYPASS_AND_VAULT_DECRYPT_SUCCESS}";
+        add("\n=========================================================================", "warn");
+        add("CLASSIFIED VALUE FOUND // SECURITY AUDIT EXFILTRATION TERMINATED:", "warn");
+        add(`FLAG: ${flagStr}`, "bright");
+        add("=========================================================================\n", "warn");
+        cmd.disabled = true; statusEl.textContent = 'LINK: EXFILTRATED';
+        document.getElementById('modalFlag').textContent = flagStr;
+        document.getElementById('winModal').style.display = 'flex';
+      }
+      return;
+    }
+
+    if (nodeFiles && nodeFiles[targetFile]) {
+      if (nodeFiles[targetFile] === "HONEYPOT_TRIGGER") {
+        state.idsAlerts++;
+        if (state.idsAlerts >= 3) {
+          triggerAlarm(`ALARM FLUSH TRIPPED: Intruder targeted alluring system asset honeyfile inside ${activeLoc}.`);
+        } else {
+          add(`\n[!] SECURITY ALERT Generated on ${activeLoc}: Sensitive system trace file probe tracked by host IDS.`, "warn");
+          add(`    Alert level incremented: (${state.idsAlerts}/3) triggers before total lockout.\n`, "warn");
+          status();
+        }
+        return;
+      }
+      
+      add(nodeFiles[targetFile]);
+      if (activeLoc === 'FS_1' && targetFile === 'sys_maintenance.txt') state.exploredFs1 = true;
+    } else { 
+      add(`cat: ${args[1]}: No such file or directory (Remote targets are strictly CASE-SENSITIVE)`, "bad"); 
+    }
+    status(); return;
+  }
+
+  if (activeLoc === 'FS_4' && (cmdRoot === 'cd' || cmdRoot === 'secured_share' || lowerClean.includes('secured_share'))) {
+    if (state.fs4Unlocked) {
+      add("Secured Share directory loaded. Available Files:\n -> classified_documents.txt", "bright");
+    } else {
+      add("[*] REQUESTED SECURED ENCRYPTED SHARE INITIALIZED. PLEASE ENTER YOUR USERNAME AND PASSWORD.");
+      state.shareAuth = { step: 'USER', username: '', password: '' };
+      promptEl.textContent = "Enter Username: ";
+    }
+    return;
+  }
+
+  if (cmdRoot === 'ssh') { handleSshCommand(args, clean); return; }
+  if (cmdRoot === 'exit') {
+    add(`Closed remote channel proxy connection to ${activeLoc}.`);
+    state.location = 'LOCAL'; status(); return;
+  }
+
+  add(`bash: ${cmdRoot}: command not found`, "bad");
+}
+
+cmd.addEventListener('keydown', e => {
+  if (e.key === 'Enter') { processCommand(cmd.value); cmd.value = ''; }
+  else if (e.key === 'ArrowUp') {
+    e.preventDefault(); if (historyIdx > 0) { historyIdx--; cmd.value = cmdHistory[historyIdx]; }
+  } else if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    if (historyIdx < cmdHistory.length - 1) { historyIdx++; cmd.value = cmdHistory[historyIdx]; }
+    else if (historyIdx === cmdHistory.length - 1) { historyIdx = cmdHistory.length; cmd.value = ''; }
+  }
+});
+
+// CHOKERPOINT FOCUS INTERCEPTOR - ALLOW COPY/PASTE WITH MOUSE
+document.addEventListener('click', (e) => {
+  if (window.getSelection().toString() === '') {
+    cmd.focus();
+  }
+});
+
+setInterval(()=>{const d=new Date(); clockEl.textContent=d.toUTCString().split(' ')[4]+' ZULU';},1000);
+write(boot,30,()=>setTimeout(()=>write(mission,20),150));
+renderMap(); status(); cmd.focus();
+</script>
+</body>
+</html>
